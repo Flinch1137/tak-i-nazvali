@@ -8,9 +8,10 @@ const mf=new Miniflare({modules:true,script:built.outputFiles[0].text,compatibil
 let checks=0;
 function check(value,message){assert.ok(value,message);checks++}
 try{
- const db=await mf.getD1Database('DB');const sql=await readFile('migrations/0001_community.sql','utf8');await db.batch(sql.split('--> statement-breakpoint').filter(s=>s.trim()).map(s=>db.prepare(s.trim())));
+ const db=await mf.getD1Database('DB');const sql=await readFile('migrations/0001_community.sql','utf8')+'\n--> statement-breakpoint\n'+await readFile('migrations/0002_moderation.sql','utf8');await db.batch(sql.split('--> statement-breakpoint').filter(s=>s.trim()).map(s=>db.prepare(s.trim())));
+ let requestNumber=0;
  const call=async(path,{method='GET',cookie='',fields,origin='https://test.example',headers:extra={}}={})=>{
-  const url='https://test.example'+path,headers={...extra};if(cookie)headers.Cookie=cookie;if(method!=='GET')headers.Origin=origin;
+  const url='https://test.example'+path,headers={'CF-Connecting-IP':'198.51.100.'+(++requestNumber),...extra};if(cookie)headers.Cookie=cookie;if(method!=='GET')headers.Origin=origin;
   if(fields){const fd=new FormData();for(const [k,v]of Object.entries(fields))fd.set(k,v);const encoded=new Request(url,{method,body:fd});headers['Content-Type']=encoded.headers.get('content-type');return mf.dispatchFetch(url,{method,headers,body:await encoded.arrayBuffer()})}
   return mf.dispatchFetch(url,{method,headers});
  };
