@@ -1,0 +1,8 @@
+node_modules/
+.wrangler/
+.deploy-check/
+.dev.vars*
+.env*
+*.log
+backup.sql
+.DS_Store
