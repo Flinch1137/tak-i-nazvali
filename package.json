@@ -2,7 +2,7 @@
   "name": "tak-i-nazvali",
   "version": "1.0.0",
   "private": true,
-  "description": "Необычная география Беларуси: карта, гостевые фото, отметки и отзывы.",
+  "description": "Необычная география Беларуси: карта, гостевые отметки и отзывы.",
   "type": "module",
   "engines": {
     "node": ">=22.13.0"
@@ -14,7 +14,7 @@
     "check": "tsc --noEmit && node --check public/app.js",
     "build": "npm run check",
     "test": "node tests/community.mjs",
-    "deploy": "wrangler d1 migrations apply DB --remote && wrangler deploy",
+    "deploy": "node scripts/setup.mjs",
     "deploy:check": "wrangler deploy --dry-run --outdir .deploy-check",
     "db:export": "wrangler d1 export DB --remote --output backup.sql",
     "deploy:button": "node scripts/deploy-button.mjs"
@@ -31,9 +31,6 @@
     "bindings": {
       "DB": {
         "description": "Отзывы, оценки и гостевые отметки. Создаётся новая база D1."
-      },
-      "BUCKET": {
-        "description": "Фотографии путешественников. R2 требует активации подписки с платёжным методом; действует бесплатная квота."
       }
     }
   }

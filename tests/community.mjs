@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { build } from 'esbuild';
 import { Miniflare } from 'miniflare';
 const built=await build({entryPoints:['src/index.ts'],bundle:true,write:false,format:'esm',platform:'neutral'});
-const mf=new Miniflare({modules:true,script:built.outputFiles[0].text,compatibilityDate:'2026-05-15',d1Databases:['DB'],r2Buckets:['BUCKET'],assets:{directory:resolve('public'),binding:'ASSETS',routerConfig:{has_user_worker:true,invoke_user_worker_ahead_of_assets:true}}});
+const mf=new Miniflare({modules:true,script:built.outputFiles[0].text,compatibilityDate:'2026-05-15',d1Databases:['DB'],assets:{directory:resolve('public'),binding:'ASSETS',routerConfig:{has_user_worker:true,invoke_user_worker_ahead_of_assets:true}}});
 let checks=0;
 function check(value,message){assert.ok(value,message);checks++}
 try{
@@ -16,8 +16,9 @@ try{
  };
  const start=async()=>{const r=await call('/api/guest',{method:'POST'});check(r.status===200,'guest session created without account');return r.headers.get('set-cookie').split(';')[0]};
  const base={placeId:'place-43',kind:'checkin',displayName:'Тестовый гость',body:'Поездка без регистрации',rating:'5',visitedAt:'2026-01-02'};
- let r=await call('/');const page=await r.text();check(r.status===200&&page.includes('Так и назвали'),'home page served by Worker assets');check(!page.includes('signin-with-chatgpt'),'homepage has no sign-in dependency');
+ let r=await call('/');const page=await r.text();check(r.status===200&&page.includes('Так и назвали'),'home page served by Worker assets');check(!page.includes('signin-with-chatgpt'),'homepage has no sign-in dependency');check(page.includes('Пока недоступно'),'photo limitation explained on homepage');
  r=await call('/app.js');const code=await r.text();check(r.status===200&&!code.includes('signin-with-chatgpt')&&!code.includes('/api/claim'),'client is independent of account platform');
+ check(!code.includes('type="file"')&&code.includes('Пока недоступно'),'photo composer has placeholder and no file picker');
  r=await call('/data.json');check(r.status===200&&(await r.json()).length===94,'94 places included');
  r=await call('/not-a-page');check(r.status===404,'unknown page returns 404');
  r=await call('/api/state');let data=await r.json();check(data.user===null&&data.feed.length===0,'anonymous public feed works');
@@ -30,24 +31,25 @@ try{
  r=await call('/api/guest',{method:'POST',cookie});check(!r.headers.has('set-cookie'),'existing guest identity is retained');
  r=await call('/api/contributions',{method:'POST',cookie,origin:'https://other.example',fields:base});check(r.status===403,'cross-origin posting blocked');
  for(const patch of[{placeId:'missing'},{rating:'6'},{visitedAt:'2026-02-31'},{body:'x'.repeat(1201)}]){r=await call('/api/contributions',{method:'POST',cookie,fields:{...base,...patch}});check(r.status===400,'invalid publication rejected')}
- const bytes=Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZQmcAAAAASUVORK5CYII=','base64'));
- r=await call('/api/contributions',{method:'POST',cookie,fields:{...base,photo:new File([bytes],'test.png',{type:'image/png'})}});check(r.status===201,'guest check-in with photo stored');const first=(await r.json()).id;
- r=await call('/api/photos/'+first);check(r.status===200&&r.headers.get('content-type')==='image/png','guest photo publicly readable');check(Buffer.from(await r.arrayBuffer()).equals(Buffer.from(bytes)),'photo round-trip correct');
+ r=await call('/api/contributions',{method:'POST',cookie,fields:{...base,photo:new File(['photo'],'test.png',{type:'image/png'})}});check(r.status===501&&(await r.json()).code==='photos_unavailable','photo upload explicitly unavailable without R2');
+ check((await db.prepare('SELECT COUNT(*) AS n FROM contributions').first()).n===0,'rejected photo leaves no partial publication');
+ r=await call('/api/contributions',{method:'POST',cookie,fields:base});check(r.status===201,'guest check-in stored without R2');const first=(await r.json()).id;
+ r=await call('/api/photos/'+first);check(r.status===501&&(await r.json()).error==='Пока недоступно','photo endpoint clearly unavailable');
  r=await call('/api/state',{cookie});data=await r.json();check(data.guestReady&&data.visited.includes(base.placeId)&&data.feed[0].mine===1,'guest ownership and visited history persisted');
  r=await call('/api/profile',{cookie});data=await r.json();check(data.entries.length===1&&data.entries[0].id===first,'guest passport retrieves own history');
  r=await call('/api/profile');check((await r.json()).entries.length===0,'cleared cookies do not recover ownership by nickname');
  const otherCookie=await start();r=await call('/api/contributions/'+first,{method:'DELETE',cookie:otherCookie});check(r.status===404,'another guest cannot delete record');
  r=await call('/api/contributions',{method:'POST',cookie,fields:{...base,kind:'review',rating:'3'}});check(r.status===201,'guest review supported');const review=(await r.json()).id;
  r=await call('/api/contributions',{method:'POST',cookie:otherCookie,fields:{...base,kind:'review',rating:'5'}});check(r.status===201,'another guest can review');const otherReview=(await r.json()).id;
- data=await(await call('/api/state')).json();check(data.stats[0].rating===4&&data.stats[0].ratings===2,'one latest rating per browser is averaged');check(data.stats[0].visits===1&&data.stats[0].photos===1,'real visit and photo counts');
+ data=await(await call('/api/state')).json();check(data.stats[0].rating===4&&data.stats[0].ratings===2,'one latest rating per browser is averaged');check(data.stats[0].visits===1&&data.stats[0].photos===0,'visit counts work with photos disabled');
  r=await call('/api/contributions',{method:'POST',cookie,fields:{...base,kind:'comment',rating:'0',body:'Комментарий гостя'}});check(r.status===201,'guest comment supported');const comment=(await r.json()).id;
- r=await call('/api/contributions',{method:'POST',cookie,fields:{...base,photo:new File(['<script>bad</script>'],'bad.png',{type:'image/png'})}});check(r.status===400,'disguised unsupported file rejected');
+ r=await call('/api/contributions',{method:'POST',cookie,fields:{...base,photo:new File(['<script>bad</script>'],'bad.png',{type:'image/png'})}});check(r.status===501,'all photo uploads disabled');
  const malformed='__Host-tak_guest=invalid';r=await call('/api/contributions/'+first,{method:'DELETE',cookie:malformed});check(r.status===401,'invalid cookie cannot delete record');
  for(const [id,owner]of[[first,cookie],[review,cookie],[comment,cookie],[otherReview,otherCookie]]){r=await call('/api/contributions/'+id,{method:'DELETE',cookie:owner});check(r.status===200,'own record can be deleted')}
- r=await call('/api/photos/'+first);check(r.status===404,'photo deleted with record');
+ r=await call('/api/photos/'+first);check(r.status===501,'photo endpoint remains unavailable after deletion');
  data=await(await call('/api/state')).json();check(!data.feed.length&&!data.stats.length,'deletion clears public feed and aggregate data');
  check((await db.prepare('SELECT COUNT(*) AS n FROM ratings').first()).n===0,'no orphan ratings remain');
  const limited=await start();for(let i=0;i<5;i++){r=await call('/api/contributions',{method:'POST',cookie:limited,fields:{...base,kind:'comment',rating:'0',body:'Rate test '+i}});check(r.status===201,'within-limit posting works')}
  r=await call('/api/contributions',{method:'POST',cookie:limited,fields:{...base,kind:'comment',rating:'0',body:'One too many'}});check(r.status===429,'per-browser posting limit enforced');
- console.log(`${checks} standalone integration checks passed: Worker assets + anonymous API + D1 + R2.`);
+ console.log(`${checks} standalone integration checks passed: Worker assets + anonymous API + D1 without R2.`);
 }finally{await mf.dispose()}

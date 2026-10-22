@@ -9,3 +9,5 @@ dialog{border:1px solid #dbe2cf;color:var(--ink);background:var(--bg);padding:0;
 body:has(dialog[open]){overflow:hidden}.leaflet-popup-content{font-family:'Onest',Arial,sans-serif;line-height:1.8}.passport-content>.feed-card{margin-bottom:14px}.passport-content>.feed-card>img{height:240px}.star-picker button:focus-visible{outline-offset:1px}.detail-dialog:focus,.composer-dialog:focus{outline:none}
 @media(max-width:640px){.hero h1{font-size:clamp(42px,13.2vw,56px)}.hero h1 .serif{font-size:.98em;letter-spacing:-2px}.heading-star{left:auto;right:6px;top:7px;margin:0;font-size:27px}}
 .guest-note{background:#edf1e3;border:1px solid #d7e1c7;border-radius:9px;padding:16px;margin-bottom:23px;color:#82956d}.guest-note strong{font-size:12px;font-weight:500;color:#6b8256}.guest-note p{font-size:10px;line-height:1.85;margin:8px 0 11px;color:#8d9f78}.optional-login{display:inline-block;font-size:10px;color:#7b925f;text-decoration:underline;text-underline-offset:3px}.guest-note .button{font-size:10px;padding:10px 12px}.form-two-col:has(>.field:only-child){grid-template-columns:1fr}
+
+.upload-zone.photo-unavailable{cursor:default;opacity:.65;pointer-events:none}

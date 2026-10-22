@@ -17,7 +17,10 @@ function persist(){const tmp=new URL('../wrangler.json.tmp',import.meta.url);wri
 try{
  console.log('\nТак и назвали → запуск в твоём Cloudflare\n');
  const me=exec(['whoami'],true);
- if(!me.ok||/not authenticated|not logged in/i.test(me.stdout+me.stderr))required(['login']);
+ if(!me.ok||/not authenticated|not logged in/i.test(me.stdout+me.stderr)){
+  if(process.env.CI||process.env.WORKERS_CI)throw new Error('Нет доступа к Cloudflare. Проверь API token в настройках сборки.');
+  required(['login']);
+ }
  const binding=config.d1_databases.find(d=>d.binding==='DB');
  if(!binding)throw new Error('В wrangler.json отсутствует привязка DB.');
  if(!binding.database_id||binding.database_id===placeholder){
@@ -30,12 +33,6 @@ try{
    const created=parseList(fresh.stdout).find(d=>d.name===binding.database_name);if(!created?.uuid)throw new Error('Не удалось найти созданную базу. Повтори npm run setup.');
    binding.database_id=created.uuid;persist();
   }
- }
- const bucket=config.r2_buckets.find(d=>d.binding==='BUCKET');if(!bucket)throw new Error('В wrangler.json отсутствует привязка BUCKET.');
- const info=exec(['r2','bucket','info',bucket.bucket_name],true);
- if(!info.ok){
-  const created=exec(['r2','bucket','create',bucket.bucket_name,'--location','eeur']);
-  if(!created.ok)throw new Error('Не удалось создать хранилище. Открой Cloudflare → R2, активируй R2 и повтори npm run setup. Если хранилище уже есть, проверь доступ к нему.');
  }
  required(['d1','migrations','apply','DB','--remote']);
  required(['deploy']);
